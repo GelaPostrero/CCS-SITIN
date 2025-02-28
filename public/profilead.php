@@ -5,22 +5,14 @@ header("Pragma: no-cache");
 header("Expires: 0");
 
 session_start();
+
+// Check if user is logged in
 if (!isset($_SESSION['login_user'])) {
     header("Location: login.php");
     exit();
 }
 
 require __DIR__ . '/../config/db.php';
-
-// Fetch available courses from the database
-$courses = [];
-$course_sql = "SELECT course_name FROM courses"; // Adjust table/column names if necessary
-$course_result = $conn->query($course_sql);
-if ($course_result && $course_result->num_rows > 0) {
-    while ($row = $course_result->fetch_assoc()) {
-        $courses[] = $row;
-    }
-}
 
 // Fetch user details
 $current_username = $_SESSION['login_user'];
@@ -33,42 +25,24 @@ $user = $user_result->fetch_assoc();
 $stmtUser->close();
 
 if (!$user) {
-    // If no user was found, force a logout
     header("Location: logout.php");
     exit();
 }
 
-// Set session variables for header use
 $_SESSION['firstname'] = $user['firstname'];
 $_SESSION['lastname'] = $user['lastname'];
 
+// Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email     = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
-    $username  = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_STRING);
-    $lastname  = filter_input(INPUT_POST, 'lastname', FILTER_SANITIZE_STRING);
+    $email = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
+    $username = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_STRING);
+    $lastname = filter_input(INPUT_POST, 'lastname', FILTER_SANITIZE_STRING);
     $firstname = filter_input(INPUT_POST, 'firstname', FILTER_SANITIZE_STRING);
-    $middlename= filter_input(INPUT_POST, 'middlename', FILTER_SANITIZE_STRING);
-    $course    = filter_input(INPUT_POST, 'course', FILTER_SANITIZE_STRING);
-    $level     = filter_input(INPUT_POST, 'level', FILTER_SANITIZE_STRING);
-    $password  = filter_input(INPUT_POST, 'password', FILTER_SANITIZE_STRING);
+    $middlename = filter_input(INPUT_POST, 'middlename', FILTER_SANITIZE_STRING);
+    $password = filter_input(INPUT_POST, 'password', FILTER_SANITIZE_STRING);
+    $idno = filter_input(INPUT_POST, 'idno', FILTER_SANITIZE_STRING);
+    $profile_picture = $user['profile_picture'];
 
-    // Fetch the most recent user details
-    $stmtUser = $conn->prepare($user_sql);
-    $stmtUser->bind_param("s", $current_username);
-    $stmtUser->execute();
-    $user_result = $stmtUser->get_result();
-    $user = $user_result->fetch_assoc();
-    $stmtUser->close();
-
-    if (!$user) {
-        echo json_encode(["success" => false, "message" => "User not found."]);
-        exit();
-    }
-
-    $idno = $user['idno'];
-    $profile_picture = $user['profile_picture']; // default remains unchanged
-
-    // Handle password update
     if (!empty($password)) {
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
         $updatePassword = true;
@@ -76,25 +50,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $updatePassword = false;
     }
 
-    // Handle profile picture upload if provided
     if (!empty($_FILES['profile_picture']['name'])) {
-        // Use the absolute path based on this file's directory.
         $targetDir = __DIR__ . '/../public/upload/';
         $fileType = strtolower(pathinfo($_FILES["profile_picture"]["name"], PATHINFO_EXTENSION));
         $allowedTypes = ["jpg", "jpeg", "png", "gif"];
 
         if (!in_array($fileType, $allowedTypes)) {
-            echo json_encode(["success" => false, "message" => "Invalid file format. Only JPG, JPEG, PNG, and GIF allowed."]);
+            echo json_encode(["success" => false, "message" => "Invalid file format."]);
             exit();
         }
 
-        // Optionally check for file upload errors
-        if ($_FILES["profile_picture"]["error"] !== UPLOAD_ERR_OK) {
-            echo json_encode(["success" => false, "message" => "Upload error code: " . $_FILES["profile_picture"]["error"]]);
-            exit();
-        }
-
-        // Generate unique file name
         $newFileName = "profile_" . $idno . "_" . time() . "." . $fileType;
         $targetFilePath = $targetDir . $newFileName;
 
@@ -106,24 +71,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Update user details in the database
     if ($updatePassword) {
-        $update_sql = "UPDATE users SET email = ?, username = ?, lastname = ?, firstname = ?, middlename = ?, course = ?, level = ?, password = ?, profile_picture = ? WHERE idno = ?";
+        $update_sql = "UPDATE users SET email=?, username=?, lastname=?, firstname=?, middlename=?, password=?, profile_picture=? WHERE idno=?";
         $stmt = $conn->prepare($update_sql);
-        $stmt->bind_param("sssssssssi", $email, $username, $lastname, $firstname, $middlename, $course, $level, $hashedPassword, $profile_picture, $idno);
+        $stmt->bind_param("sssssssi", $email, $username, $lastname, $firstname, $middlename, $hashedPassword, $profile_picture, $idno);
     } else {
-        $update_sql = "UPDATE users SET email = ?, username = ?, lastname = ?, firstname = ?, middlename = ?, course = ?, level = ?, profile_picture = ? WHERE idno = ?";
-        $stmt = $conn->prepare($update_sql);
-        $stmt->bind_param("ssssssssi", $email, $username, $lastname, $firstname, $middlename, $course, $level, $profile_picture, $idno);
+      $update_sql = "UPDATE users SET email=?, username=?, lastname=?, firstname=?, middlename=?, profile_picture=?, idno=? WHERE idno=?";
+      $stmt = $conn->prepare($update_sql);
+      $stmt->bind_param("ssssssii", $email, $username, $lastname, $firstname, $middlename, $profile_picture, $idno, $user['idno']);
+      
     }
 
     if ($stmt->execute()) {
         $_SESSION['login_user'] = $username;
-        echo json_encode([
-            "success" => true,
-            "message" => "Profile updated successfully!",
-            "profile_picture" => $profile_picture
-        ]);
+        echo json_encode(["success" => true, "message" => "Profile updated successfully!", "profile_picture" => $profile_picture]);
     } else {
         echo json_encode(["success" => false, "message" => "Error updating profile: " . $stmt->error]);
     }
@@ -133,63 +94,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit();
 }
 ?>
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="fonts/material-design-iconic-font/css/material-design-iconic-font.min.css">
-  <link rel="stylesheet" href="css/profile.css">
+  <link rel="stylesheet" href="css/profilead.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <title>Profile Settings</title>
   <style>
-    body { font-family: "Poppins-Regular"; color: #333; font-size: 14px; margin: 0; }
+    input::placeholder {
+    font-family: poppins-regular !important; /* Adjust the font family */
+    font-size: 16px !important; /* Adjust the size as needed */
+}
+
+    body { font-family: "Poppins-Regular"; color: #333; font-size: 16px; margin: 0; }
+    .inner form { width: 100%; }
     .sidebar { width: 5rem; transition: all 0.3s ease-in-out; }
     .sidebar:hover { width: 16rem; }
     .sidebar:hover .sidebar-text { display: inline; }
     .sidebar-text { display: none; }
     .sidebar a { display: flex; align-items: center; justify-content: center; padding: 1rem; }
     .sidebar:hover a { justify-content: flex-start; }
-    .sidebar i { font-size: 1.5rem; }
-    .dropdown-content { display: none; margin-left: 2rem; }
-    .dropdown:hover .dropdown-content { display: block; }
-    .wrapper { min-height: 0; margin-top: 30px; }
-    .wrapper::before { background: none; }
-    .inner form { width: 100%; margin: 40px; padding-top: 0; }
-    .inner { padding: 0; }
-    .div-button1 { height: 51px; border-radius: 6px; border: 1px solid #951313; }
-    .div-button2 { height: 51px; color: white; background-color: #7952b3; border-radius: 6px; }
-    .form-control::placeholder { font-size: 15px; }
-    body { margin: 0; }
+    .sidebar i { font-size: 16px; }
     .main-content { margin-left: 5rem; transition: margin-left 0.3s ease-in-out; }
     .sidebar:hover + .main-content { margin-left: 16rem; }
+    .div-button1 { height: 51px; border-radius: 6px; border: 1px solid #951313; }
+    .div-button2 { height: 51px; color: white; background-color: #7952b3; border-radius: 6px; }
   </style>
 </head>
 <body class="bg-gray-100 font-sans antialiased">
   <div class="flex h-screen">
-    <?php include 'sidebar.php'; ?>
+    <?php include 'sidebarad.php'; ?>
     <div class="main-content flex-1 flex flex-col">
-      <?php include 'header1.php'; ?>
+      <?php include 'headerad1.php'; ?>
       <div class="flex-1 p-6">
         <div class="inner max-w-lg mx-auto">
-          <form method="post" enctype="multipart/form-data">
+          <form id="profileForm" method="post" enctype="multipart/form-data">
             <div class="flex justify-center items-center w-full">
               <label for="profile-picture-upload" class="cursor-pointer relative">
-              <img id="profile-picture-preview" 
-     src="<?php echo isset($user['profile_picture']) 
-         ? 'upload/' . htmlspecialchars($user['profile_picture']) 
-         : 'images/default-profile.png'; ?>" 
-     alt="Profile Picture" 
-     class="rounded-full w-24 h-24 mx-auto object-cover border-2 border-gray-300"/>
-
+                <img id="profile-picture-preview" 
+                     src="<?php echo isset($user['profile_picture']) 
+                     ? 'upload/' . htmlspecialchars($user['profile_picture']) 
+                     : 'images/default-profile.png'; ?>" 
+                     alt="Profile Picture" 
+                     class="rounded-full w-24 h-24 mx-auto object-cover border-2 border-gray-300"/>
                 <i class="zmdi zmdi-camera absolute bottom-2 right-2 bg-gray-700 text-white p-1 rounded-full"></i>
               </label>
               <input type="file" id="profile-picture-upload" name="profile_picture" class="hidden" accept="image/*"/>
             </div>
             <div class="form-wrapper">
-              <input class="form-control mt-10" id="idno" placeholder="ID Number" type="text" 
-                     value="<?php echo isset($user['idno']) ? htmlspecialchars($user['idno']) : ''; ?>" readonly/>
-              <i class="zmdi zmdi-card"></i>
+                <input class="form-control mt-10" id="idno" name="idno" placeholder="ID Number" type="text" 
+                    value="<?php echo isset($user['idno']) ? htmlspecialchars($user['idno']) : ''; ?>"/>
+                <i class="zmdi zmdi-card"></i>
             </div>
             <div class="form-group gap-6" style="background-color: transparent !important;">
               <input class="form-control" id="lastname" name="lastname" placeholder="Last Name" type="text" 
@@ -198,31 +158,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      value="<?php echo isset($user['firstname']) ? htmlspecialchars($user['firstname']) : ''; ?>"/>
               <input class="form-control" id="middlename" name="middlename" placeholder="Middle Name" type="text" 
                      value="<?php echo isset($user['middlename']) ? htmlspecialchars($user['middlename']) : ''; ?>"/>
-            </div>
-            <div class="form-group">
-              <div class="form-wrapper" style="width: 50%; margin-right: 25px;">
-                <select class="form-control" id="course" name="course">
-                  <option value="" disabled>Select Course</option>
-                  <?php foreach ($courses as $course_item): ?>
-                    <option value="<?php echo htmlspecialchars($course_item['course_name']); ?>"
-                      <?php echo (isset($user['course']) && $user['course'] === $course_item['course_name']) ? 'selected' : ''; ?>>
-                      <?php echo htmlspecialchars($course_item['course_name']); ?>
-                    </option>
-                  <?php endforeach; ?>
-                </select>
-                <i class="zmdi zmdi-caret-down" style="font-size: 17px; bottom: 30px;"></i>
-              </div>
-              <div class="form-wrapper" style="width: 50%;">
-                <select class="form-control" id="level" name="level">
-                  <option value="" disabled>Select Year Level</option>
-                  <?php for ($i = 1; $i <= 4; $i++): ?>
-                    <option value="<?php echo $i; ?>" <?php echo (isset($user['level']) && $user['level'] == $i) ? 'selected' : ''; ?>>
-                      <?php echo $i; ?>
-                    </option>
-                  <?php endfor; ?>
-                </select>
-                <i class="zmdi zmdi-caret-down" style="font-size: 17px; bottom: 30px;"></i>
-              </div>
             </div>
             <div class="form-wrapper">
               <input class="form-control" id="email" name="email" placeholder="Email Address" type="email" 
@@ -236,14 +171,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <div class="form-wrapper">
               <input type="password" name="password" id="password" placeholder="Password" 
-                     class="form-control <?php echo !empty($error3) ? 'error' : ''; ?>" 
-                     style="margin-bottom: <?php echo !empty($error3) ? '10px' : '25px'; ?>;" value=""/>
+                     class="form-control" value=""/>
               <i class="zmdi zmdi-lock" id="togglePassword" style="cursor: pointer;"></i>
             </div>
-            <?php if (!empty($error3)): ?>
-              <div class="error-message" style="color: red;"><?php echo htmlspecialchars($error3); ?></div>
-            <?php endif; ?>
-            <div class="div-button flex text-center justify-center gap-10">
+            <div class="div-button flex text-center justify-center gap-16">
               <button class="div-button1" style="margin-top: 0;" type="button" onclick="window.location.href='profile.php'">Cancel</button>
               <button class="div-button2" type="submit" style="margin-top: 0;">Save</button>
             </div>
@@ -256,11 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Toggle password visibility
     document.getElementById("togglePassword").addEventListener("click", function () {
         let passwordInput = document.getElementById("password");
-        if (passwordInput.type === "password") {
-            passwordInput.type = "text";
-        } else {
-            passwordInput.type = "password";
-        }
+        passwordInput.type = passwordInput.type === "password" ? "text" : "password";
     });
 
     // Preview image on file select
@@ -276,24 +203,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     });
 
     // Submit form via fetch API
-    document.querySelector("form").addEventListener("submit", function(event) {
-        event.preventDefault();
-        let formData = new FormData(event.target);
-        fetch('profile.php', {
+    document.getElementById("profileForm").addEventListener("submit", function(event) {
+        event.preventDefault(); // Prevent the default form submission
+        let formData = new FormData(this); // Create a FormData object from the form
+
+        fetch('profilead.php', {
             method: 'POST',
             body: formData
         })
-        .then(response => response.json())
+        .then(response => response.json()) // Parse the JSON response
         .then(data => {
             if (data.success) {
-                alert("Profile updated successfully!");
+                alert(data.message); // Show success message
                 if (data.profile_picture) {
                     // Update preview using public URL; add a timestamp to bust cache
                     document.getElementById("profile-picture-preview").src = "upload/" + data.profile_picture + "?t=" + new Date().getTime();
                 }
-                location.reload();
+                location.reload(); // Reload the page to reflect changes
             } else {
-                alert("Error: " + data.message);
+                alert("Error: " + data.message); // Show error message
             }
         })
         .catch(error => {

@@ -4,6 +4,9 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Assume $user is fetched from the database after verifying login credentials.
+$_SESSION['firstname'] = $user['firstname'];
+$_SESSION['lastname'] = $user['lastname'];
 require __DIR__ . '/../config/db.php';
 
 // Debug: output session idno value
@@ -15,7 +18,6 @@ $page = basename($_SERVER['PHP_SELF'], ".php");
 // Define a title based on the page
 $titles = [
     "index" => "Dashboard",
-    "announcement" => "Announcements",
     "profile" => "Profile Settings",
     "sitin" => "Sit-In Rules and Regulations",
     "laboratory" => "Laboratory Rules and Regulations",
@@ -25,37 +27,12 @@ $titles = [
 
 // Set the page title dynamically (default to 'Dashboard' if not found)
 $pageTitle = isset($titles[$page]) ? $titles[$page] : "Dashboard";
-
-// Fetch user info from session or database
-$firstname = "Guest";
-$lastname = "";
-$initials = "G";
-
-if (isset($_SESSION['login_user'])) {
-    $username = $_SESSION['login_user'];
-    $query = $conn->prepare("SELECT firstname, lastname, profile_picture, role FROM users WHERE username = ?");
-    $query->bind_param("s", $username);
-    $query->execute();
-    $result = $query->get_result();
-    
-    if ($result->num_rows > 0) {
-        $user = $result->fetch_assoc();
-        $firstname = $user['firstname'];
-        $lastname = $user['lastname'];
-        $role = $user['role'];
-        $profile_picture = $user['profile_picture'] ?? "default-profile.png";
-        $initials = strtoupper(substr($firstname, 0, 1) . substr($lastname, 0, 1));
-
-        // Update session variables
-        $_SESSION['firstname'] = $firstname;
-        $_SESSION['lastname'] = $lastname;
-        $_SESSION['role'] = $role;
-        $_SESSION['profile_picture'] = $profile_picture;
-    }
-    $query->close();
-}
-
-
+// Ensure session variables exist before using them
+$firstname = isset($_SESSION['firstname']) ? $_SESSION['firstname'] : "Guest";
+$lastname = isset($_SESSION['lastname']) ? $_SESSION['lastname'] : "";
+$initials = strtoupper(substr($firstname, 0, 1) . substr($lastname, 0, 1));
+$role = isset($user['role']) ? $user['role'] : "";
+$profile_picture = isset($user['profile_picture']) ? $user['profile_picture'] : "default-profile.png";
 $conn->close();
 ?>
 <!DOCTYPE html>
@@ -67,16 +44,33 @@ $conn->close();
     <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .header{
-            position:sticky;
+        .header {
+            position: sticky;
             top: 0;
         }
-        
+        #search-button {
+    position: relative;
+    z-index: 9999;
+}
+
+
     </style>
 </head>
 <body>
 <header class="header flex items-center justify-between bg-white p-6">
     <h2 class="text-2xl font-semibold"><?php echo $pageTitle; ?></h2>
+    
+    <!-- Search Bar (Visible on Larger Screens) -->
+    <form action="search_results.php" method="GET" class="relative w-80 flex items-center sm:flex hidden">
+        <div class="relative w-full">
+            <button type="submit" class="absolute inset-y-0 right-3 flex items-center">
+                <i class="fas fa-search text-gray-400"></i>
+            </button>
+            <input type="text" name="query" placeholder="Search by Name or ID" 
+                class="w-full py-2 pl-5 pr-10 h-10 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500">
+        </div>
+    </form>
+    
     <div class="flex items-center">
         <!-- Bell Icon -->
         <i class="fas fa-bell text-xl mr-6"></i>
@@ -86,9 +80,9 @@ $conn->close();
                 <!-- Profile Initials -->
                 <div class="w-12 h-12 flex items-center justify-center text-black font-semibold rounded-full mr-2 text-lg border-2 border-gray">
                     <?php 
-                    if($profile_picture && file_exists(__DIR__ . '/../public/upload/' . $profile_picture)){
+                    if ($profile_picture && file_exists(__DIR__ . '/../public/upload/' . $profile_picture)) {
                         echo '<img src="upload/' . htmlspecialchars($profile_picture) . '" alt="Profile Picture" class="w-full h-full object-cover rounded-full">';
-                    }else{
+                    } else {
                         echo $initials;
                     }
                     ?>
@@ -124,6 +118,19 @@ $conn->close();
             dropdown.classList.add('hidden');
         }
     });
+    $(document).ready(function() {
+    $("#search").on("input", function() {
+        $.ajax({
+            url: "search.php",
+            method: "POST",
+            data: { query: $(this).val() },
+            success: function(response) {
+                $("#search-results").html(response);
+            }
+        });
+    });
+});
+
 </script>
 </body>
 </html>

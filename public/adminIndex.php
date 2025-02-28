@@ -1,11 +1,25 @@
 <?php
+session_start();
+if (isset($_SESSION['login_success']) && $_SESSION['login_success'] === true) {
+    echo "<script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const dialog = document.getElementById('successDialog');
+            if (dialog) {
+                dialog.showModal();
+            }
+        });
+    </script>";
+    unset($_SESSION['login_success']); // Remove success flag
+}
+?>
+
+<?php
 // Prevent caching
 header("Cache-Control: no-cache, no-store, must-revalidate"); // HTTP 1.1.
 header("Pragma: no-cache"); // HTTP 1.0.
 header("Expires: 0"); // Proxies.
 ?>
 <?php
-session_start();
 
 // Check if the user is logged in
 if (!isset($_SESSION['login_user'])) {
@@ -28,6 +42,10 @@ if (!isset($_SESSION['login_user'])) {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/js/all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Chart.js -->
     <style>
+     header.header.flex.items-center.justify-between.bg-white.py-6.px-6{
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
 body {
     font-family: "Poppins-Regular";
     color: #333;
@@ -78,17 +96,20 @@ body {
     margin-left: 16rem; /* Adjust content when sidebar expands */
 
 }
+.header form{
+    margin-top: 16px;
+}
 </style>
 </head>
 <body class="bg-gray-100 font-sans antialiased">
     <div class="flex h-screen">
         <!-- Include Sidebar -->
-        <?php include 'sidebar.php'; ?>
+        <?php include 'sidebarad.php'; ?>
 
         <!-- Main Content -->
         <div class="main-content flex-1 flex flex-col">
             <!-- Include Header -->
-            <?php include 'header.php'; ?>
+            <?php include 'headerad.php'; ?>
 
             <!-- Content -->
             <div class="flex-1 p-6">
@@ -96,22 +117,7 @@ body {
                     <!-- Left Column: Sessions and Lab Usage -->
                     <div class="md:col-span-2 space-y-6">
                         <div class="grid grid-cols-2 gap-6">
-                            <!-- Sessions Left -->
-                            <div class="bg-[#002044] text-white p-4 rounded-lg flex items-center justify-between h-24">
-                                <div>
-                                    <p class="text-3xl font-semibold">30</p>
-                                    <p>Sessions Left</p>
-                                </div>
-                                <i class="fas fa-calendar-alt text-3xl"></i>
-                            </div>
-                            <!-- Sessions Used -->
-                            <div class="bg-white p-4 rounded-lg flex items-center justify-between shadow h-24">
-                                <div>
-                                    <p class="text-3xl font-semibold">30</p>
-                                    <p>Sessions Used</p>
-                                </div>
-                                <i class="fas fa-calendar-alt text-3xl text-gray-500"></i>
-                            </div>
+
                         </div>
                         <!-- Lab Usage -->
                         <div class="bg-white p-6 rounded-lg shadow">
@@ -131,21 +137,6 @@ body {
                     </div>
                     <!-- Right Column: Announcements -->
                     <div class="bg-white p-6 rounded-lg shadow">
-                        <h3 class="text-lg font-semibold mb-4">Announcements</h3>
-                        <div class="space-y-4">
-                            <div class="bg-[#002044] text-white p-4 rounded-lg flex justify-between items-center">
-                                <p>New Sit-In Rules Are Set</p>
-                                <span class="text-sm">15 minutes ago</span>
-                            </div>
-                            <div class="bg-white p-4 rounded-lg flex justify-between items-center shadow">
-                                <p>New Sit-In Rules Are Set</p>
-                                <span class="text-sm text-gray-500">1 hour ago</span>
-                            </div>
-                            <div class="bg-white p-4 rounded-lg flex justify-between items-center shadow">
-                                <p>New Sit-In Rules Are Set</p>
-                                <span class="text-sm text-gray-500">3 hours ago</span>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
